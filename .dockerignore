@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+secrets/
+**/secrets/
+*.log

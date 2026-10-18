@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../../backend/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipRole {
+  VIEWER
+  MEMBER
+  LEAD
+  ADMIN
+}
+
+enum WorkItemType {
+  INCIDENT
+  CUSTOMER_ISSUE
+  PAYMENT
+  COMPLIANCE
+  TASK
+}
+
+enum WorkItemPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum WorkItemStatus {
+  OPEN
+  IN_PROGRESS
+  AWAITING_APPROVAL
+  RESOLVED
+  CLOSED
+}
+
+enum OutboxJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  email              String              @unique @db.VarChar(254)
+  name               String              @db.VarChar(120)
+  passwordHash       String              @db.VarChar(255)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  sessions           Session[]
+  memberships        Membership[]
+  createdItems       WorkItem[]          @relation("WorkItemCreator")
+  assignedItems      WorkItem[]          @relation("WorkItemAssignee")
+  activities         ActivityEvent[]
+  comments           Comment[]
+  idempotencyRecords IdempotencyRecord[]
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique @db.Char(64)
+  userId    String   @db.Uuid
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Team {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @db.VarChar(120)
+  slug        String       @unique @db.VarChar(120)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @db.Timestamptz(3)
+  memberships Membership[]
+  workItems   WorkItem[]
+}
+
+model Membership {
+  userId    String         @db.Uuid
+  teamId    String         @db.Uuid
+  role      MembershipRole
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId])
+  @@index([teamId, role])
+}
+
+model WorkItem {
+  id          String           @id @default(uuid()) @db.Uuid
+  title       String           @db.VarChar(200)
+  description String           @db.Text
+  type        WorkItemType
+  priority    WorkItemPriority @default(NORMAL)
+  status      WorkItemStatus   @default(OPEN)
+  teamId      String           @db.Uuid
+  assigneeId  String?          @db.Uuid
+  creatorId   String           @db.Uuid
+  dueDate     DateTime?        @db.Timestamptz(3)
+  version     Int              @default(1)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+  team        Team             @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  assignee    User?            @relation("WorkItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator     User             @relation("WorkItemCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  activities  ActivityEvent[]
+  comments    Comment[]
+  outboxJobs  OutboxJob[]
+
+  @@index([teamId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([teamId, status])
+  @@index([teamId, priority])
+  @@index([teamId, type])
+  @@index([teamId, assigneeId])
+  @@index([teamId, priority, assigneeId])
+}
+
+model ActivityEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  workItemId String   @db.Uuid
+  actorId    String   @db.Uuid
+  eventType  String   @db.VarChar(50)
+  metadata   Json
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  actor      User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, createdAt, id])
+  @@index([actorId, createdAt])
+}
+
+model Comment {
+  id         String   @id @default(uuid()) @db.Uuid
+  workItemId String   @db.Uuid
+  authorId   String   @db.Uuid
+  body       String   @db.VarChar(5000)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  workItem   WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([workItemId, createdAt, id])
+  @@index([authorId, createdAt])
+}
+
+model IdempotencyRecord {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  key         String   @db.VarChar(128)
+  fingerprint String   @db.Char(64)
+  response    Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([expiresAt])
+}
+
+model OutboxJob {
+  id            String          @id @default(uuid()) @db.Uuid
+  workItemId    String?         @db.Uuid
+  eventType     String          @db.VarChar(50)
+  payload       Json
+  status        OutboxJobStatus @default(PENDING)
+  attempts      Int             @default(0)
+  nextAttemptAt DateTime        @default(now()) @db.Timestamptz(3)
+  lockedAt      DateTime?       @db.Timestamptz(3)
+  lastError     String?         @db.VarChar(500)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
+  completedAt   DateTime?       @db.Timestamptz(3)
+  workItem      WorkItem?       @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([lockedAt])
+  @@index([workItemId, status])
+}

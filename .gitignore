@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+backend/src/generated/prisma/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.vscode/
+.vercel/

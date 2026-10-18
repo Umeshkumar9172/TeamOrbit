@@ -1,0 +1,41 @@
+{
+  "name": "@newtonite/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "prisma generate && tsx watch src/server.ts",
+    "worker": "node dist/outbox-worker.js",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "prisma generate && tsc --noEmit",
+    "lint": "eslint src",
+    "test": "prisma generate && vitest run",
+    "test:integration": "tsx src/require-integration-test-opt-in.ts && prisma generate && vitest run src/*.integration.test.ts",
+    "db:migrate": "prisma migrate dev && prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "prisma generate && tsx ../database/seed.ts",
+    "db:demo-accounts:preview": "tsx ../database/update-demo-accounts.ts preview",
+    "db:demo-accounts:update": "tsx ../database/update-demo-accounts.ts apply"
+  },
+  "prisma": {
+    "seed": "tsx ../database/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
+    "argon2": "^0.44.0",
+    "cookie": "^1.0.2",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.10",
+    "@types/supertest": "^6.0.3",
+    "prisma": "^7.10.1",
+    "supertest": "^7.1.1",
+    "tsx": "^4.20.3"
+  }
+}
